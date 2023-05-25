@@ -3,9 +3,11 @@ package searchengine.model;
 import lombok.Data;
 import lombok.Getter;
 import lombok.Setter;
+import org.springframework.beans.factory.annotation.Autowired;
 
 import javax.persistence.*;
-import java.sql.Date;
+import java.time.LocalDateTime;
+import java.util.Optional;
 
 @Entity
 @Table(name = "site")
@@ -20,7 +22,7 @@ public class SiteDatabase {
     private Status status;
 
     @Column(name = "status_time", nullable = false, unique = true)
-    private Date statusTime;
+    private LocalDateTime statusTime;
 
     @Column(name = "last_error")
     private String lastError;
@@ -30,4 +32,21 @@ public class SiteDatabase {
 
     @Column(columnDefinition = "VARCHAR(255)", nullable = false, unique = true)
     private String name;
+
+    public Optional<SiteDatabase> findById(int siteId) {
+        return;
+    }
+
+    public void save(SiteDatabase site) {
+        id = site.getId();
+        status = site.getStatus();
+        statusTime = site.getStatusTime();
+        lastError = site.getLastError();
+        url = site.getUrl();
+        name = site.getName();
+    }
+
+    public void deleteBySite(String name) {
+
+    }
 }

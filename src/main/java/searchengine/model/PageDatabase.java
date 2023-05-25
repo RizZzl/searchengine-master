@@ -15,8 +15,6 @@ public class PageDatabase {
     private int id;
 
     @ManyToOne
-    @JoinColumn(name = "site_id")
-    @Column(nullable = false, unique = true)
     private SiteDatabase site;
 
     @Column(nullable = false, unique = true)
@@ -27,4 +25,15 @@ public class PageDatabase {
 
     @Column(columnDefinition = "MEDIUMTEXT", nullable = false, unique = true)
     private String content;
+
+    public void save(PageDatabase page) {
+        id = page.getId();
+        site = page.getSite();
+        code = page.getCode();
+        content = page.getContent();
+    }
+
+    public void deleteBySite(String name) {
+
+    }
 }

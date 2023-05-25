@@ -15,8 +15,6 @@ public class LemmaDatabase {
     private int id;
 
     @ManyToOne
-    @JoinColumn(name = "site_id")
-    @Column(nullable = false, unique = true)
     private SiteDatabase site;
 
     @Column(nullable = false, unique = true)

@@ -4,24 +4,24 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-import searchengine.dto.statistics.DetailedStatisticsItem;
 import searchengine.dto.statistics.StatisticsData;
 import searchengine.dto.statistics.StatisticsResponse;
 import searchengine.dto.statistics.TotalStatistics;
 import searchengine.services.StatisticsService;
 
-import java.util.List;
+import java.io.Serializable;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api")
 public class ApiController {
 
     private final StatisticsService statisticsService;
-    private final StatisticsResponse statisticsResponse;
+    private boolean isIndexingRunning;
 
-    public ApiController(StatisticsService statisticsService, StatisticsResponse statisticsResponse) {
+
+    public ApiController(StatisticsService statisticsService) {
         this.statisticsService = statisticsService;
-        this.statisticsResponse = statisticsResponse;
     }
 
     @GetMapping("/statistics")
@@ -30,19 +30,22 @@ public class ApiController {
     }
 
     @GetMapping("/startIndexing")
-    public void startIndexing() {
+    public ResponseEntity<Object> startIndexing() {
+        if (isIndexingRunning()) {
+            return ResponseEntity.ok()
+                    .body(Map.of("result", false, "error", "Индексация уже запущена"));
+        }
+        isIndexingRunning = true;
+
+        return ResponseEntity.ok()
+                .body(Map.of("result", true));
+    }
+
+    public boolean isIndexingRunning() {
         StatisticsResponse statisticsResponse = statisticsService.getStatistics();
         StatisticsData statisticsData = statisticsResponse.getStatistics();
         TotalStatistics totalStatistics = statisticsData.getTotal();
-        boolean indexing = totalStatistics.getIndexing();
-        if (indexing) {
-            statisticsResponse.setResult(false);
-            StatisticsData statisticsData1 = statisticsResponse.getStatistics();
-            List<DetailedStatisticsItem> list = statisticsData1.getDetailed();
-            DetailedStatisticsItem detailedStatisticsItem = list.get(1);
-            detailedStatisticsItem.setError("Индексация уже запущена");
-        }
-        statisticsResponse.setResult(true);
-
+        isIndexingRunning = totalStatistics.getIndexing();
+        return isIndexingRunning;
     }
 }

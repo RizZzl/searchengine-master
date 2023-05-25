@@ -15,13 +15,9 @@ public class IndexDatabase {
     private int id;
 
     @ManyToOne
-    @JoinColumn(name = "page_id")
-    @Column(nullable = false, unique = true)
     private PageDatabase page;
 
     @ManyToOne
-    @JoinColumn(name = "lemma_id")
-    @Column(nullable = false, unique = true)
     private LemmaDatabase lemma;
 
     @Column(nullable = false, unique = true)
