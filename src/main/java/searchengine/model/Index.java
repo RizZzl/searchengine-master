@@ -9,16 +9,16 @@ import javax.persistence.*;
 @Table(name = "index")
 @Getter
 @Setter
-public class IndexDatabase {
+public class Index {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private int id;
 
     @ManyToOne
-    private PageDatabase page;
+    private Page page;
 
     @ManyToOne
-    private LemmaDatabase lemma;
+    private Lemma lemma;
 
     @Column(nullable = false, unique = true)
     private float rank;

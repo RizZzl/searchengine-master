@@ -9,13 +9,14 @@ import javax.persistence.*;
 @Table(name = "page")
 @Getter
 @Setter
-public class PageDatabase {
+public class Page {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private int id;
 
     @ManyToOne
-    private SiteDatabase site;
+    @JoinColumn(name = "site_id")
+    private Site site;
 
     @Column(nullable = false, unique = true)
     private String path;
@@ -25,15 +26,4 @@ public class PageDatabase {
 
     @Column(columnDefinition = "MEDIUMTEXT", nullable = false, unique = true)
     private String content;
-
-    public void save(PageDatabase page) {
-        id = page.getId();
-        site = page.getSite();
-        code = page.getCode();
-        content = page.getContent();
-    }
-
-    public void deleteBySite(String name) {
-
-    }
 }

@@ -9,7 +9,6 @@ import searchengine.dto.statistics.StatisticsResponse;
 import searchengine.dto.statistics.TotalStatistics;
 import searchengine.services.StatisticsService;
 
-import java.io.Serializable;
 import java.util.Map;
 
 @RestController

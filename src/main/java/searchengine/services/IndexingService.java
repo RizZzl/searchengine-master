@@ -6,46 +6,53 @@ import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
-import searchengine.model.PageDatabase;
-import searchengine.model.SiteDatabase;
-import searchengine.model.Status;
+import org.yaml.snakeyaml.Yaml;
+import searchengine.model.*;
 
-import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.RecursiveAction;
 
 @Service
 public class IndexingService {
-    private final SiteDatabase siteDatabase;
-    private final PageDatabase pageDatabase;
+    private final Site site;
+    private final Page page;
     private List<String> urls;
 
     @Autowired
-    public IndexingService(SiteDatabase siteDatabase, PageDatabase pageDatabase) {
-        this.siteDatabase = siteDatabase;
-        this.pageDatabase = pageDatabase;
+    private PageRepository pageRepository;
+    @Autowired
+    private SiteRepository siteRepository;
+
+    @Autowired
+    public IndexingService(Site siteDatabase, Page pageDatabase) {
+        this.site = siteDatabase;
+        this.page = pageDatabase;
     }
 
     public void startIndexing() {
         // Получение списка сайтов из конфигурации приложения
         List<String> names = getWebsitesFromConfiguration();
-        int count = 0; urls.size();
+        int count = 0;
         for (String name : names) {
             // Удаление данных по сайту
-            siteDatabase.deleteBySite(name);
-            pageDatabase.deleteBySite(name);
+            siteRepository.deleteBySite(name);
+            pageRepository.deleteBySite(name);
 
             String url = urls.get(count);
             count++;
             // Создание новой записи о сайте со статусом INDEXING
-            SiteDatabase site = new SiteDatabase();
+            Site site = new Site();
             site.setName(name);
             site.setUrl(url);
             site.setStatus(Status.INDEXING);
-            siteDatabase.save(site);
+            siteRepository.save(site);
 
             // Запуск индексации сайта в новом потоке
             IndexingTask indexingTask = new IndexingTask(name, site.getId());
@@ -59,16 +66,36 @@ public class IndexingService {
                 site.setLastError(indexingTask.getErrorMessage());
             }
 
-            siteDatabase.save(site);
+            siteRepository.save(site);
         }
     }
 
     private List<String> getWebsitesFromConfiguration() {
         // Получение списка сайтов из конфигурации приложения
-        File file = new File("application.yaml");
-        System.out.println(file);
-//        urls;
-        List<String> names = null;
+        List<String> names = new ArrayList<>();
+        try {
+            Yaml yaml = new Yaml();
+            FileInputStream inputStream = new FileInputStream("application.yaml");
+
+            // Чтение файла YAML
+            Map<String, Object> data = yaml.load(inputStream);
+
+            // Получение списка сайтов
+            List<Map<String, String>> sites = (List<Map<String, String>>) data.get("indexing-settings.sites");
+
+            // Извлечение url и name из каждого сайта
+            for (Map<String, String> site : sites) {
+                String url = site.get("url");
+                String name = site.get("name");
+
+                // Добавление url и name в список
+                urls.add(url);
+                names.add(name);
+            }
+        } catch (FileNotFoundException e) {
+            e.printStackTrace();
+        }
+
         return names;
     }
 
@@ -78,13 +105,14 @@ public class IndexingService {
         String content = doc.html();
 
         // Сохранение данных страницы в базу данных
-        SiteDatabase site = new SiteDatabase();
+        Site site = new Site();
         site.setName(website);
 
-        PageDatabase page = new PageDatabase();
+        Page page = new Page();
         page.setSite(site);
         page.setPath(pageUrl);
         page.setContent(content);
+        pageRepository.save(page);
 
         // Обход ссылок на странице
         Elements links = doc.select("a[href]");
@@ -120,10 +148,10 @@ public class IndexingService {
                 indexPage(website, website);
 
                 // Обновление даты и времени статуса сайта
-                SiteDatabase site = (SiteDatabase) siteDatabase;// .findById(siteId).orElse(null);
+                Site site = siteRepository.findById(siteId).orElse(null).getSite();
                 if (site != null) {
                     site.setStatusTime(LocalDateTime.now());
-                    siteDatabase.save(site);
+                    siteRepository.save(site);
                 }
 
                 completedSuccessfully = true;

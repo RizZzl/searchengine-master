@@ -9,13 +9,13 @@ import javax.persistence.*;
 @Table(name = "lemma")
 @Getter
 @Setter
-public class LemmaDatabase {
+public class Lemma {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private int id;
 
     @ManyToOne
-    private SiteDatabase site;
+    private Site site;
 
     @Column(nullable = false, unique = true)
     private String lemma;
