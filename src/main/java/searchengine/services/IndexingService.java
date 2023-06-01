@@ -7,6 +7,7 @@ import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import searchengine.config.SitesList;
 import searchengine.model.*;
 
@@ -35,6 +36,7 @@ public class IndexingService {
         this.siteRepository = siteRepository;
     }
 
+    @Transactional
     public void startIndexing() {
         // Получение списка сайтов из конфигурации приложения
         List<searchengine.config.Site> sites1 = new ArrayList<>();
@@ -50,8 +52,8 @@ public class IndexingService {
             // Удаление данных по сайту
             Site siteDel = siteRepository.findByName(name);
             if (siteDel != null) {
-                siteRepository.delete(siteDel);
-                pageRepository.deleteBySite(siteDel);
+                pageRepository.deleteBySiteId(siteDel.getId());
+                siteRepository.deleteByName(siteDel.getName());
             }
 
             String url = urls.get(count);
@@ -65,7 +67,7 @@ public class IndexingService {
             siteRepository.save(site);
 
             // Запуск индексации сайта в новом потоке
-            IndexingTask indexingTask = new IndexingTask(name, site.getId());
+            IndexingTask indexingTask = new IndexingTask(name, url, site.getId());
             ForkJoinPool.commonPool().invoke(indexingTask);
 
             // Обновление статуса сайта на INDEXED или FAILED по завершении индексации
@@ -108,11 +110,15 @@ public class IndexingService {
             site.setName(website);
             site.setUrl(pageUrl);
             site.setStatus(Status.INDEXING);
+            site.setStatusTime(LocalDateTime.now());
+            siteRepository.save(site);
         }
 
         Page page = new Page();
         page.setSite(site);
-        page.setPath(pageUrl);
+        if (!pageUrl.equals(site.getUrl())){
+            page.setPath(pageUrl.replace(site.getUrl(), ""));
+        }
         page.setCode(getResponseCode(pageUrl));
         page.setContent(content);
         pageRepository.save(page);
@@ -122,7 +128,9 @@ public class IndexingService {
         for (Element link : links) {
             String linkUrl = link.attr("abs:href");
             // Проверка, был ли уже обработан этот URL
-            if (!isPageIndexed(linkUrl)) {
+            System.out.println(linkUrl);
+            System.out.println(!isPageIndexed(linkUrl));
+            if (!isPageIndexed(linkUrl) && linkUrl.startsWith(site.getUrl())) {
                 indexPage(website, linkUrl);
                 Thread.sleep(500); // Задержка между запросами к страницам
             }
@@ -148,13 +156,15 @@ public class IndexingService {
     }
 
     private class IndexingTask extends RecursiveAction {
-        private final String website;
+        private final String name;
+        private final String url;
         private final int siteId;
         private boolean completedSuccessfully;
         private String errorMessage;
 
-        public IndexingTask(String website, int siteId) {
-            this.website = website;
+        public IndexingTask(String name, String url, int siteId) {
+            this.name = name;
+            this.url = url;
             this.siteId = siteId;
         }
 
@@ -170,7 +180,7 @@ public class IndexingService {
         protected void compute() {
             try {
                 // Обход главной страницы и индексация
-                indexPage(website, website);
+                indexPage(name, url);
 
                 // Обновление даты и времени статуса сайта
                 Site site = siteRepository.findById(siteId).orElse(null).getSite();

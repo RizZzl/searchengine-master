@@ -18,12 +18,12 @@ public class Page {
     @JoinColumn(name = "site_id")
     private Site site;
 
-    @Column(nullable = false, unique = true)
+    @Column(nullable = false)
     private String path;
 
-    @Column(nullable = false, unique = true)
+    @Column(nullable = false)
     private int code;
 
-    @Column(columnDefinition = "MEDIUMTEXT", nullable = false, unique = true)
+    @Column(columnDefinition = "MEDIUMTEXT", nullable = false)
     private String content;
 }
