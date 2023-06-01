@@ -9,6 +9,5 @@ import java.util.Optional;
 public interface SiteRepository extends JpaRepository<Site, Integer> {
     void deleteByName(String name);
     Optional<Page> findById(int pageId);
-
-    Optional<Site> findByName(String website);
+    Site findByName(String name);
 }

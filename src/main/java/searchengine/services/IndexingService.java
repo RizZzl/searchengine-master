@@ -1,21 +1,19 @@
 package searchengine.services;
 
+import org.jsoup.Connection;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
-import org.yaml.snakeyaml.Yaml;
+import searchengine.config.SitesList;
 import searchengine.model.*;
 
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.RecursiveAction;
 
@@ -23,6 +21,8 @@ import java.util.concurrent.RecursiveAction;
 public class IndexingService {
     private List<String> urls;
     private static final String USER_AGENT = "HeliontSearchBot";
+    private volatile boolean stopIndexingRequested;
+    private final SitesList sites = new SitesList();
 
     @Autowired
     private final PageRepository pageRepository;
@@ -37,12 +37,22 @@ public class IndexingService {
 
     public void startIndexing() {
         // Получение списка сайтов из конфигурации приложения
+        List<searchengine.config.Site> sites1 = new ArrayList<>();
+        searchengine.config.Site site1 = new searchengine.config.Site();
+        site1.setUrl("http://www.playback.ru/");
+        site1.setName("playback");
+        sites1.add(site1);
+        sites.setSites(sites1);
+
         List<String> names = getWebsitesFromConfiguration();
         int count = 0;
         for (String name : names) {
             // Удаление данных по сайту
-            siteRepository.deleteByName(name);
-            pageRepository.deleteBySite(name);
+            Site siteDel = siteRepository.findByName(name);
+            if (siteDel != null) {
+                siteRepository.delete(siteDel);
+                pageRepository.deleteBySite(siteDel);
+            }
 
             String url = urls.get(count);
             count++;
@@ -50,6 +60,7 @@ public class IndexingService {
             Site site = new Site();
             site.setName(name);
             site.setUrl(url);
+            site.setStatusTime(LocalDateTime.now());
             site.setStatus(Status.INDEXING);
             siteRepository.save(site);
 
@@ -64,35 +75,20 @@ public class IndexingService {
                 site.setStatus(Status.FAILED);
                 site.setLastError(indexingTask.getErrorMessage());
             }
-
             siteRepository.save(site);
         }
     }
 
     private List<String> getWebsitesFromConfiguration() {
         // Получение списка сайтов из конфигурации приложения
+        List<searchengine.config.Site> sitesList = sites.getSites();
         List<String> names = new ArrayList<>();
-        try {
-            Yaml yaml = new Yaml();
-            FileInputStream inputStream = new FileInputStream("application.yaml");
-
-            // Чтение файла YAML
-            Map<String, Object> data = yaml.load(inputStream);
-
-            // Получение списка сайтов
-            List<Map<String, String>> sites = (List<Map<String, String>>) data.get("indexing-settings.sites");
-
-            // Извлечение url и name из каждого сайта
-            if (sites != null) { // Проверка, что sites не равно null
-                for (Map<String, String> site : sites) {
-                    String url = site.get("url");
-                    String name = site.get("name");
-                    urls.add(url);
-                    names.add(name);
-                }
+        urls = new ArrayList<>();
+        if (sitesList!=null) {
+            for (searchengine.config.Site site : sitesList) {
+                urls.add(site.getUrl());
+                names.add(site.getName());
             }
-        } catch (FileNotFoundException e) {
-            e.printStackTrace();
         }
         return names;
     }
@@ -100,13 +96,13 @@ public class IndexingService {
     private void indexPage(String website, String pageUrl) throws IOException, InterruptedException {
         // Получение содержимого страницы и обход ссылок
         Document doc = Jsoup.connect(pageUrl)
-                .userAgent(USER_AGENT) // Установка значения User-Agent
+                .userAgent(USER_AGENT)
                 .referrer("http://www.google.com")
                 .get();
         String content = doc.html();
 
         // Сохранение данных страницы в базу данных
-        Site site = siteRepository.findByName(website).orElse(null);
+        Site site = siteRepository.findByName(website);
         if (site == null) {
             site = new Site();
             site.setName(website);
@@ -117,6 +113,7 @@ public class IndexingService {
         Page page = new Page();
         page.setSite(site);
         page.setPath(pageUrl);
+        page.setCode(getResponseCode(pageUrl));
         page.setContent(content);
         pageRepository.save(page);
 
@@ -124,7 +121,6 @@ public class IndexingService {
         Elements links = doc.select("a[href]");
         for (Element link : links) {
             String linkUrl = link.attr("abs:href");
-            indexPage(website, linkUrl);
             // Проверка, был ли уже обработан этот URL
             if (!isPageIndexed(linkUrl)) {
                 indexPage(website, linkUrl);
@@ -132,10 +128,24 @@ public class IndexingService {
             }
         }
     }
-        private boolean isPageIndexed(String pageUrl) {
-            // Проверка, есть ли уже запись о данной странице в базе данных
-            return pageRepository.existsByPath(pageUrl);
-        }
+
+    private boolean isPageIndexed(String pageUrl) {
+        // Проверка, есть ли уже запись о данной странице в базе данных
+        return pageRepository.existsByPath(pageUrl);
+    }
+
+    private int getResponseCode(String pageUrl) throws IOException {
+        // Получение кода ответа страницы
+        Connection.Response response = Jsoup.connect(pageUrl)
+                .userAgent(USER_AGENT)
+                .referrer("http://www.google.com")
+                .execute();
+        return response.statusCode();
+    }
+
+    public void stopIndexingProcess() {
+        stopIndexingRequested = true;
+    }
 
     private class IndexingTask extends RecursiveAction {
         private final String website;
@@ -171,8 +181,19 @@ public class IndexingService {
 
                 completedSuccessfully = true;
             } catch (Exception e) {
+                System.out.println("error");
                 completedSuccessfully = false;
                 errorMessage = e.getMessage();
+            } finally {
+                if (stopIndexingRequested) {
+                    // Если была запрошена остановка индексации, записываем состояние FAILED и текст ошибки
+                    Site site = siteRepository.findById(siteId).orElse(null).getSite();
+                    if (site != null) {
+                        site.setStatus(Status.FAILED);
+                        site.setLastError("Индексация остановлена пользователем");
+                        siteRepository.save(site);
+                    }
+                }
             }
         }
     }

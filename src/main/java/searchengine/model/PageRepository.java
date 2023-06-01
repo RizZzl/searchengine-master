@@ -7,8 +7,7 @@ import java.util.Optional;
 
 @Repository
 public interface PageRepository extends JpaRepository<Page, Integer> {
-    void deleteBySite(String name);
+    void deleteBySite(Site site);
     Optional<Page> findById(int pageId);
-
     boolean existsByPath(String pageUrl);
 }
