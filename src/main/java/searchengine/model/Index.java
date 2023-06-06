@@ -22,6 +22,6 @@ public class Index {
     @JoinColumn(name = "lemma_id")
     private Lemma lemma;
 
-    @Column(name = "rank_value", nullable = false, unique = true) // изменил имя поля rank на rank_value
+    @Column(name = "rank_value", nullable = false, unique = true)
     private float rank;
 }

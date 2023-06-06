@@ -12,4 +12,5 @@ public interface SiteRepository extends JpaRepository<Site, Integer> {
     void deleteByName(String name);
     Optional<Page> findById(int pageId);
     Site findByName(String name);
+    Site findById(Site siteId);
 }

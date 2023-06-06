@@ -15,6 +15,7 @@ import java.io.IOException;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.RecursiveAction;
 
@@ -24,16 +25,24 @@ public class IndexingService {
     private static final String USER_AGENT = "HeliontSearchBot";
     private volatile boolean stopIndexingRequested;
     private final SitesList sites = new SitesList();
+    private LemmaService lemmaService;
+    private Map<String, Integer> lemmaCountMap;
 
     @Autowired
     private final PageRepository pageRepository;
     @Autowired
     private final SiteRepository siteRepository;
+    @Autowired
+    private final LemmaRepository lemmaRepository;
+    @Autowired
+    private final IndexRepository indexRepository;
 
     @Autowired
-    public IndexingService(PageRepository pageRepository, SiteRepository siteRepository) {
+    public IndexingService(PageRepository pageRepository, SiteRepository siteRepository, LemmaRepository lemmaRepository, IndexRepository indexRepository) {
         this.pageRepository = pageRepository;
         this.siteRepository = siteRepository;
+        this.lemmaRepository = lemmaRepository;
+        this.indexRepository = indexRepository;
     }
 
     @Transactional
@@ -42,7 +51,7 @@ public class IndexingService {
         List<searchengine.config.Site> sites1 = new ArrayList<>();
         searchengine.config.Site site1 = new searchengine.config.Site();
         site1.setUrl("http://www.playback.ru/");
-        site1.setName("playback");
+        site1.setName("PlayBack");
         sites1.add(site1);
         sites.setSites(sites1);
 
@@ -96,6 +105,12 @@ public class IndexingService {
     }
 
     private void indexPage(String website, String pageUrl) throws IOException, InterruptedException {
+        if (isPageIndexed(pageUrl)) {
+            // Если страница уже проиндексирована, удаление информации о ней
+            deleteIndexedPage(pageUrl);
+            return;
+        }
+
         // Получение содержимого страницы и обход ссылок
         Document doc = Jsoup.connect(pageUrl)
                 .userAgent(USER_AGENT)
@@ -118,18 +133,22 @@ public class IndexingService {
         page.setSite(site);
         if (!pageUrl.equals(site.getUrl())){
             page.setPath(pageUrl.replace(site.getUrl(), ""));
+        } else {
+            page.setPath(pageUrl);
         }
         page.setCode(getResponseCode(pageUrl));
         page.setContent(content);
         pageRepository.save(page);
+
+        lemmaService = new LemmaService(pageRepository);
+        lemmaCountMap = lemmaService.indexPage(pageUrl);
+        updateLemmaAndIndex(lemmaService.getLemmas(), page);
 
         // Обход ссылок на странице
         Elements links = doc.select("a[href]");
         for (Element link : links) {
             String linkUrl = link.attr("abs:href");
             // Проверка, был ли уже обработан этот URL
-            System.out.println(linkUrl);
-            System.out.println(!isPageIndexed(linkUrl));
             if (!isPageIndexed(linkUrl) && linkUrl.startsWith(site.getUrl())) {
                 indexPage(website, linkUrl);
                 Thread.sleep(500); // Задержка между запросами к страницам
@@ -153,6 +172,67 @@ public class IndexingService {
 
     public void stopIndexingProcess() {
         stopIndexingRequested = true;
+    }
+
+    private void updateLemmaAndIndex(List<String> lemmas, Page page) {
+        for (String lemma : lemmas) {
+            // Поиск леммы в базе данных
+            Site site = siteRepository.findById(page.getSite());
+            Lemma existingLemma = lemmaRepository.findByName(lemma);
+            if (existingLemma == null) {
+                // Леммы нет в базе данных, добавляем новую запись
+                Lemma newLemma = new Lemma();
+                newLemma.setSite(site);
+                newLemma.setLemma(lemma);
+                newLemma.setFrequency(1);
+                lemmaRepository.save(newLemma);
+
+                // Создание записи в индексе
+                Index newIndex = new Index();
+                newIndex.setLemma(newLemma);
+                newIndex.setPage(page);
+                newIndex.setRank(lemmaCountMap.get(existingLemma));
+                indexRepository.save(newIndex);
+            } else {
+                // Лемма уже существует в базе данных, увеличиваем ее frequency
+                existingLemma.setFrequency(existingLemma.getFrequency() + 1);
+                lemmaRepository.save(existingLemma);
+
+                // Проверка наличия записи в индексе для данной леммы и страницы
+                Index existingIndex = indexRepository.findByLemmaAndPage(existingLemma, page);
+                if (existingIndex == null) {
+                    // Записи в индексе нет, создаем новую запись
+                    Index newIndex = new Index();
+                    newIndex.setLemma(existingLemma);
+                    newIndex.setPage(page);
+                    newIndex.setRank(lemmaCountMap.get(existingLemma));
+                    indexRepository.save(newIndex);
+                } else {
+                    // Запись в индексе уже существует, увеличиваем ее ранг
+                    existingIndex.setRank(existingIndex.getRank() + lemmaCountMap.get(existingLemma));
+                    indexRepository.save(existingIndex);
+                }
+            }
+        }
+    }
+
+    private void deleteIndexedPage(String pageUrl) {
+        // Удаление информации о странице из таблиц page, lemma и index
+        Page page = pageRepository.findByPath(pageUrl);
+        if (page != null) {
+            Site site = siteRepository.findById(page.getSite());
+            // Удаление связей в таблице index
+            indexRepository.deleteByPage(page);
+
+            // Удаление связей в таблице lemma
+            List<Lemma> lemmas = lemmaRepository.findAllBySite(site);
+            for (Lemma lemma : lemmas) {
+                lemmaRepository.delete(lemma);
+            }
+
+            // Удаление записи о странице из таблицы page
+            pageRepository.delete(page);
+        }
     }
 
     private class IndexingTask extends RecursiveAction {
@@ -191,7 +271,7 @@ public class IndexingService {
 
                 completedSuccessfully = true;
             } catch (Exception e) {
-                System.out.println("error");
+                System.out.println("error: " + e); /////
                 completedSuccessfully = false;
                 errorMessage = e.getMessage();
             } finally {

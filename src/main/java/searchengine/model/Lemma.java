@@ -15,12 +15,12 @@ public class Lemma {
     private int id;
 
     @ManyToOne
+    @JoinColumn(name = "site_id")
     private Site site;
 
-    @Column(nullable = false, unique = true)
+    @Column(nullable = false)
     private String lemma;
 
-    @Column(nullable = false, unique = true)
+    @Column(nullable = false)
     private int frequency;
-
 }
