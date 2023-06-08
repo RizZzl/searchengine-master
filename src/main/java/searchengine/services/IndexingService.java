@@ -14,6 +14,7 @@ import searchengine.model.*;
 import java.io.IOException;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ForkJoinPool;
@@ -25,8 +26,8 @@ public class IndexingService {
     private static final String USER_AGENT = "HeliontSearchBot";
     private volatile boolean stopIndexingRequested;
     private final SitesList sites = new SitesList();
-    private LemmaService lemmaService;
-    private Map<String, Integer> lemmaCountMap;
+    // private LemmaService lemmaService;
+    private Map<String, Integer> lemmaCountMap = new HashMap<>();
 
     @Autowired
     private final PageRepository pageRepository;
@@ -108,7 +109,6 @@ public class IndexingService {
         if (isPageIndexed(pageUrl)) {
             // Если страница уже проиндексирована, удаление информации о ней
             deleteIndexedPage(pageUrl);
-            return;
         }
 
         // Получение содержимого страницы и обход ссылок
@@ -140,8 +140,11 @@ public class IndexingService {
         page.setContent(content);
         pageRepository.save(page);
 
-        lemmaService = new LemmaService(pageRepository);
-        lemmaCountMap = lemmaService.indexPage(pageUrl);
+        LemmaService lemmaService = new LemmaService(pageRepository);
+        lemmaCountMap = lemmaService.getLemmaCountMap();
+
+        lemmaService.indexPage(pageUrl);
+
         updateLemmaAndIndex(lemmaService.getLemmas(), page);
 
         // Обход ссылок на странице
@@ -178,7 +181,7 @@ public class IndexingService {
         for (String lemma : lemmas) {
             // Поиск леммы в базе данных
             Site site = siteRepository.findById(page.getSite());
-            Lemma existingLemma = lemmaRepository.findByName(lemma);
+            Lemma existingLemma = lemmaRepository.findByLemma(lemma);
             if (existingLemma == null) {
                 // Леммы нет в базе данных, добавляем новую запись
                 Lemma newLemma = new Lemma();
@@ -186,6 +189,7 @@ public class IndexingService {
                 newLemma.setLemma(lemma);
                 newLemma.setFrequency(1);
                 lemmaRepository.save(newLemma);
+                System.out.println("New Lemma add"); ///////////
 
                 // Создание записи в индексе
                 Index newIndex = new Index();
@@ -193,6 +197,7 @@ public class IndexingService {
                 newIndex.setPage(page);
                 newIndex.setRank(lemmaCountMap.get(existingLemma));
                 indexRepository.save(newIndex);
+                System.out.println("New Index add"); //////////////
             } else {
                 // Лемма уже существует в базе данных, увеличиваем ее frequency
                 existingLemma.setFrequency(existingLemma.getFrequency() + 1);
@@ -207,10 +212,12 @@ public class IndexingService {
                     newIndex.setPage(page);
                     newIndex.setRank(lemmaCountMap.get(existingLemma));
                     indexRepository.save(newIndex);
+                    System.out.println("Add index"); /////////////
                 } else {
                     // Запись в индексе уже существует, увеличиваем ее ранг
                     existingIndex.setRank(existingIndex.getRank() + lemmaCountMap.get(existingLemma));
                     indexRepository.save(existingIndex);
+                    System.out.println("Index add"); /////////////
                 }
             }
         }

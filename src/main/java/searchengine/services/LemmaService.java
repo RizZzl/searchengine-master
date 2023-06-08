@@ -18,7 +18,7 @@ import java.util.regex.Pattern;
 @Service
 public class LemmaService {
     List<String> lemmas = new ArrayList<>();
-
+    HashMap<String, Integer> lemmaCountMap = new HashMap<>();
     @Autowired
     private final PageRepository pageRepository;
 
@@ -26,43 +26,27 @@ public class LemmaService {
         this.pageRepository = pageRepository;
     }
 
-    public Map<String, Integer> indexPage(String url) throws IOException {
+    public void indexPage(String url) throws IOException {
         Page page = pageRepository.findByPath(url);
         String html = page.getContent();
 
         // Извлечение текста из HTML-кода
         String text = stripHtmlTags(html);
-
-        return countLemmas(text);
-//        for (String lemma : lemmas) {
-//            int rank = lemmaCountMap.get(lemma);
-//            Lemma lemma1 = new Lemma();
-//            lemma1.setLemma(lemma);
-//            lemma1.setFrequency();
-//            lemma1.setSite(site);
-//            lemmaRepository.save(lemma1);
-//
-//
-//            Index index = new Index();
-//            index.setPage(page);
-//            index.setLemma(lemma1);
-//            index.setRank(rank);
-//            indexRepository.save(index);
-//        }
+        countLemmas(text);
     }
 
-    public List<String> getLemmas() {
-        return lemmas;
-    }
-
-    public HashMap<String, Integer> countLemmas(String text) throws IOException {
-        HashMap<String, Integer> lemmaCountMap = new HashMap<>();
-
-        Pattern pattern = Pattern.compile("\\w+", Pattern.UNICODE_CHARACTER_CLASS | Pattern.CASE_INSENSITIVE);
+    public void countLemmas(String text) throws IOException {
+        Pattern pattern = Pattern.compile("\\b[А-Яа-я]+\\b", Pattern.UNICODE_CHARACTER_CLASS | Pattern.CASE_INSENSITIVE);
         Matcher matcher = pattern.matcher(text);
         SortedSet<String> words = new TreeSet<>();
         while (matcher.find()){
-            words.add(matcher.group().toLowerCase());
+            String word = matcher.group().toLowerCase();
+
+            // Проверка, чтобы matcher не был числом
+            if (word.matches("-?\\d+(\\.\\d+)?")) {
+                continue;
+            }
+            words.add(word);
         }
         for (String word : words) {
             if (isStopWord(word)) {
@@ -73,12 +57,15 @@ public class LemmaService {
                 lemmaCountMap.put(lemma, lemmaCountMap.getOrDefault(lemma, 0) + 1);
             }
         }
-        return lemmaCountMap;
     }
 
     private boolean isStopWord(String word) throws IOException {
         LuceneMorphology luceneMorph = new RussianLuceneMorphology();
         List<String> wordBaseForms = luceneMorph.getNormalForms(word);
+        if (wordBaseForms.size() < 2){
+            lemmas.add(wordBaseForms.get(0));
+            return false;
+        }
         String secondWord = wordBaseForms.get(1);
 
         List<String> stopWords = List.of("СОЮЗ", "МЕЖД", "ПРЕДЛ", "ЧАСТ");
@@ -90,12 +77,14 @@ public class LemmaService {
     }
 
     public String stripHtmlTags(String html) {
-        Document doc = Jsoup.parse(html);
-        Elements elements = doc.select("*");
+        return Jsoup.parse(html).text();
+    }
 
-        for (Element element : elements) {
-            element.unwrap();
-        }
-        return doc.text();
+    public List<String> getLemmas() {
+        return lemmas;
+    }
+
+    public Map<String, Integer> getLemmaCountMap() {
+        return lemmaCountMap;
     }
 }

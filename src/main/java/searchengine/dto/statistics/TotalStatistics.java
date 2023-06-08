@@ -8,8 +8,4 @@ public class TotalStatistics {
     private int pages;
     private int lemmas;
     private boolean indexing;
-
-    public boolean getIndexing() {
-        return indexing;
-    }
 }
