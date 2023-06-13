@@ -10,10 +10,10 @@ import java.util.Optional;
 @Repository
 @Transactional
 public interface PageRepository extends JpaRepository<Page, Integer> {
-    void deleteBySite(Site site);
-    Optional<Page> findById(int pageId);
-    boolean existsByPath(String pageUrl);
     void deleteBySiteId(int siteId);
+    Optional<Page> findById(Page pageId);
+    boolean existsByPath(String pageUrl);
     Page findByPath(String path);
-    List<Page> findAllBySiteId(int id);
+    List<Page> findAllBySiteId(Site id);
+    Page findBySiteId(int siteId);
 }

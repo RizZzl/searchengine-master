@@ -26,7 +26,6 @@ public class IndexingService {
     private static final String USER_AGENT = "HeliontSearchBot";
     private volatile boolean stopIndexingRequested;
     private final SitesList sites = new SitesList();
-    // private LemmaService lemmaService;
     private Map<String, Integer> lemmaCountMap = new HashMap<>();
 
     @Autowired
@@ -62,6 +61,8 @@ public class IndexingService {
             // Удаление данных по сайту
             Site siteDel = siteRepository.findByName(name);
             if (siteDel != null) {
+                indexRepository.deleteByPage(pageRepository.findBySiteId(siteDel.getId()));
+                lemmaRepository.deleteBySiteId(siteDel.getId());
                 pageRepository.deleteBySiteId(siteDel.getId());
                 siteRepository.deleteByName(siteDel.getName());
             }
@@ -77,7 +78,7 @@ public class IndexingService {
             siteRepository.save(site);
 
             // Запуск индексации сайта в новом потоке
-            IndexingTask indexingTask = new IndexingTask(name, url, site.getId());
+            IndexingTask indexingTask = new IndexingTask(name, url);
             ForkJoinPool.commonPool().invoke(indexingTask);
 
             // Обновление статуса сайта на INDEXED или FAILED по завершении индексации
@@ -85,7 +86,11 @@ public class IndexingService {
                 site.setStatus(Status.INDEXED);
             } else {
                 site.setStatus(Status.FAILED);
-                site.setLastError(indexingTask.getErrorMessage());
+                String errorMessage = indexingTask.getErrorMessage();
+                if (errorMessage.length() > 255) {
+                    errorMessage = errorMessage.substring(0, 255);
+                }
+                site.setLastError(errorMessage);
             }
             siteRepository.save(site);
         }
@@ -180,8 +185,8 @@ public class IndexingService {
     private void updateLemmaAndIndex(List<String> lemmas, Page page) {
         for (String lemma : lemmas) {
             // Поиск леммы в базе данных
-            Site site = siteRepository.findById(page.getSite());
-            Lemma existingLemma = lemmaRepository.findByLemma(lemma);
+            Site site = siteRepository.findById(page.getSite().getId());
+            Lemma existingLemma = lemmaRepository.findByLemmaAndSite(lemma, site);
             if (existingLemma == null) {
                 // Леммы нет в базе данных, добавляем новую запись
                 Lemma newLemma = new Lemma();
@@ -189,15 +194,13 @@ public class IndexingService {
                 newLemma.setLemma(lemma);
                 newLemma.setFrequency(1);
                 lemmaRepository.save(newLemma);
-                System.out.println("New Lemma add"); ///////////
 
                 // Создание записи в индексе
                 Index newIndex = new Index();
                 newIndex.setLemma(newLemma);
                 newIndex.setPage(page);
-                newIndex.setRank(lemmaCountMap.get(existingLemma));
+                newIndex.setRank(lemmaCountMap.get(lemma));
                 indexRepository.save(newIndex);
-                System.out.println("New Index add"); //////////////
             } else {
                 // Лемма уже существует в базе данных, увеличиваем ее frequency
                 existingLemma.setFrequency(existingLemma.getFrequency() + 1);
@@ -210,14 +213,12 @@ public class IndexingService {
                     Index newIndex = new Index();
                     newIndex.setLemma(existingLemma);
                     newIndex.setPage(page);
-                    newIndex.setRank(lemmaCountMap.get(existingLemma));
+                    newIndex.setRank(lemmaCountMap.get(lemma));
                     indexRepository.save(newIndex);
-                    System.out.println("Add index"); /////////////
                 } else {
                     // Запись в индексе уже существует, увеличиваем ее ранг
-                    existingIndex.setRank(existingIndex.getRank() + lemmaCountMap.get(existingLemma));
+                    existingIndex.setRank(existingIndex.getRank() + lemmaCountMap.get(lemma));
                     indexRepository.save(existingIndex);
-                    System.out.println("Index add"); /////////////
                 }
             }
         }
@@ -227,7 +228,7 @@ public class IndexingService {
         // Удаление информации о странице из таблиц page, lemma и index
         Page page = pageRepository.findByPath(pageUrl);
         if (page != null) {
-            Site site = siteRepository.findById(page.getSite());
+            Site site = siteRepository.findById(page.getSite().getId());
             // Удаление связей в таблице index
             indexRepository.deleteByPage(page);
 
@@ -245,14 +246,12 @@ public class IndexingService {
     private class IndexingTask extends RecursiveAction {
         private final String name;
         private final String url;
-        private final int siteId;
         private boolean completedSuccessfully;
         private String errorMessage;
 
-        public IndexingTask(String name, String url, int siteId) {
+        public IndexingTask(String name, String url) {
             this.name = name;
             this.url = url;
-            this.siteId = siteId;
         }
 
         public boolean isCompletedSuccessfully() {
@@ -270,7 +269,7 @@ public class IndexingService {
                 indexPage(name, url);
 
                 // Обновление даты и времени статуса сайта
-                Site site = siteRepository.findById(siteId).orElse(null).getSite();
+                Site site = siteRepository.findByName(name);
                 if (site != null) {
                     site.setStatusTime(LocalDateTime.now());
                     siteRepository.save(site);
@@ -284,7 +283,7 @@ public class IndexingService {
             } finally {
                 if (stopIndexingRequested) {
                     // Если была запрошена остановка индексации, записываем состояние FAILED и текст ошибки
-                    Site site = siteRepository.findById(siteId).orElse(null).getSite();
+                    Site site = siteRepository.findByName(name);
                     if (site != null) {
                         site.setStatus(Status.FAILED);
                         site.setLastError("Индексация остановлена пользователем");

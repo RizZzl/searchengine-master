@@ -1,23 +1,29 @@
 package searchengine.controllers;
 
+import lombok.Getter;
+import lombok.Setter;
+import org.apache.lucene.morphology.LuceneMorphology;
+import org.apache.lucene.morphology.russian.RussianLuceneMorphology;
+import org.jsoup.Jsoup;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import searchengine.config.Site;
 import searchengine.config.SitesList;
 import searchengine.dto.statistics.StatisticsResponse;
-import searchengine.model.IndexRepository;
-import searchengine.model.LemmaRepository;
-import searchengine.model.PageRepository;
-import searchengine.model.SiteRepository;
+import searchengine.model.*;
 import searchengine.services.IndexingService;
+import searchengine.services.SearchService;
 import searchengine.services.StatisticsService;
 
+import javax.naming.directory.SearchResult;
+import java.io.IOException;
 import java.net.MalformedURLException;
 import java.net.URL;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api")
@@ -31,11 +37,9 @@ public class ApiController {
     @Autowired
     private IndexRepository indexRepository;
 
+    public SitesList sitesList = new SitesList();
     private final StatisticsService statisticsService;
     private boolean isIndexingRunning = false;
-
-    private SitesList sitesList = new SitesList();
-
 
     public ApiController(StatisticsService statisticsService) {
         this.statisticsService = statisticsService;
@@ -73,34 +77,44 @@ public class ApiController {
         return ResponseEntity.ok().body(Map.of("result", true));
     }
 
-    @PostMapping("/api/indexPage")
+    @PostMapping("/indexPage")
     public ResponseEntity<Object> indexPage(@RequestParam("url") String url) {
         Site site = new Site();
         List<Site> sites = new ArrayList<>();
 
         // Извлечение имени сайта из URL
         String name = extractWebsiteFromUrl(url);
-
-        site.setUrl(url);
-        site.setName(name);
-        sites.add(site);
         // Проверка, находится ли страница в пределах указанных сайтов
         if (!isWebsiteAllowed(name)) {
             return ResponseEntity.badRequest()
                     .body(Map.of("result", false, "error", "Данная страница находится за пределами сайтов, указанных в конфигурационном файле"));
         }
+
+        System.out.println("name" + name); //////////
+        site.setUrl(url);
+        site.setName(name);
+        sites.add(site);
+
         sitesList.setSites(sites);
 
-        if (isIndexingRunning) {
-            return ResponseEntity.ok().body(Map.of("result", false, "error", "Индексация не запущена"));
-        }
-
-        isIndexingRunning = true;
-        IndexingService indexingService = new IndexingService(pageRepository, siteRepository, lemmaRepository, indexRepository);
-        indexingService.startIndexing();
-        isIndexingRunning = false;
+//        if (isIndexingRunning) {
+//            return ResponseEntity.ok().body(Map.of("result", false, "error", "Индексация уже запущена"));
+//        }
+//
+//        isIndexingRunning = true;
+//        IndexingService indexingService = new IndexingService(pageRepository, siteRepository, lemmaRepository, indexRepository);
+//        indexingService.startIndexing();
+//        isIndexingRunning = false;
 
         return ResponseEntity.ok().body(Map.of("result", true));
+    }
+
+    @GetMapping("/search")
+    private ResponseEntity<Object> search(String query, String siteUrl, int offset, int limit) throws IOException {
+        SearchService searchService = new SearchService(pageRepository, siteRepository, lemmaRepository, indexRepository);
+        List<SearchService.SearchResult> paginatedResults = searchService.search(query, siteUrl, offset, limit);
+
+        return ResponseEntity.ok(paginatedResults);
     }
 
     private String extractWebsiteFromUrl(String url) {
@@ -116,9 +130,13 @@ public class ApiController {
         return website;
     }
 
-    /////////////////////////////////////////////////
     private boolean isWebsiteAllowed(String website) {
-        return true;
+        List<Site> siteList = sitesList.getSites();
+        if (siteList == null) return true;
+        for (Site site : siteList) {
+            if (site.getUrl().equals(website) || website.startsWith(site.getUrl())) return true;
+        }
+        return false;
     }
-    ////////////////////////////////////////////////
+
 }

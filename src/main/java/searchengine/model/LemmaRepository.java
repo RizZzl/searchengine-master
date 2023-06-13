@@ -11,4 +11,7 @@ import java.util.List;
 public interface LemmaRepository extends JpaRepository<Lemma, Integer> {
     Lemma findByLemma(String lemma);
     List<Lemma> findAllBySite(Site site);
+    Lemma findByLemmaAndSiteId(String lemma, int id);
+    void deleteBySiteId(int id);
+    Lemma findByLemmaAndSite(String lemma, Site site);
 }

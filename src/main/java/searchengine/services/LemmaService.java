@@ -3,9 +3,6 @@ package searchengine.services;
 import org.apache.lucene.morphology.LuceneMorphology;
 import org.apache.lucene.morphology.russian.RussianLuceneMorphology;
 import org.jsoup.Jsoup;
-import org.jsoup.nodes.Document;
-import org.jsoup.nodes.Element;
-import org.jsoup.select.Elements;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import searchengine.model.*;
@@ -41,11 +38,6 @@ public class LemmaService {
         SortedSet<String> words = new TreeSet<>();
         while (matcher.find()){
             String word = matcher.group().toLowerCase();
-
-            // Проверка, чтобы matcher не был числом
-            if (word.matches("-?\\d+(\\.\\d+)?")) {
-                continue;
-            }
             words.add(word);
         }
         for (String word : words) {
@@ -62,11 +54,12 @@ public class LemmaService {
     private boolean isStopWord(String word) throws IOException {
         LuceneMorphology luceneMorph = new RussianLuceneMorphology();
         List<String> wordBaseForms = luceneMorph.getNormalForms(word);
+        String secondWord;
         if (wordBaseForms.size() < 2){
-            lemmas.add(wordBaseForms.get(0));
-            return false;
+            secondWord = wordBaseForms.get(0);
+        } else {
+            secondWord = wordBaseForms.get(1);
         }
-        String secondWord = wordBaseForms.get(1);
 
         List<String> stopWords = List.of("СОЮЗ", "МЕЖД", "ПРЕДЛ", "ЧАСТ");
         for (String stopWord : stopWords) {

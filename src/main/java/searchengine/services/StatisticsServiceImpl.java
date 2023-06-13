@@ -95,7 +95,7 @@ public class StatisticsServiceImpl implements StatisticsService {
     }
 
     private TotalStatistics calculateTotalStatistics() {
-        int sitesCount = sites.getSites().size();
+        int sitesCount = siteRepository.findAll().size();
         int pagesCount = pageRepository.findAll().size();
         int lemmasCount = lemmaRepository.findAll().size();
         boolean indexing = true;
@@ -132,7 +132,7 @@ public class StatisticsServiceImpl implements StatisticsService {
             item.setName(site.getName());
             item.setStatus(siteEntity.getStatus().name());
             item.setStatusTime(siteEntity.getStatusTime().toEpochSecond(ZoneOffset.UTC));
-            item.setPages(pageRepository.findAllBySiteId(siteEntity.getId()).size());
+            item.setPages(pageRepository.findAllBySiteId(siteEntity).size());
             item.setLemmas(lemmaRepository.findAllBySite(siteEntity).size());
 
             if (siteEntity.getStatus() == Status.FAILED) {
