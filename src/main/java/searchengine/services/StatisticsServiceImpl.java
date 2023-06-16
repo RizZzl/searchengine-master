@@ -14,62 +14,9 @@ import searchengine.model.SiteRepository;
 import searchengine.model.Status;
 
 import java.time.ZoneOffset;
-import java.time.temporal.TemporalField;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Random;
 
-//@Service
-//@RequiredArgsConstructor
-//public class StatisticsServiceImpl implements StatisticsService {
-//
-//    private final Random random = new Random();
-//    private final SitesList sites;
-//    private final SiteRepository siteRepository;
-//
-//    @Override
-//    public StatisticsResponse getStatistics() {
-//        String[] statuses = { "INDEXED", "FAILED", "INDEXING" };
-//        String[] errors = {
-//                "Ошибка индексации: главная страница сайта не доступна",
-//                "Ошибка индексации: сайт не доступен",
-//                ""
-//        };
-//
-//        TotalStatistics total = new TotalStatistics();
-//        total.setSites(sites.getSites().size());
-//        total.setIndexing(true);
-//
-//        List<DetailedStatisticsItem> detailed = new ArrayList<>();
-//        List<Site> sitesList = sites.getSites();
-//        for(int i = 0; i < sitesList.size(); i++) {
-//            Site site = sitesList.get(i);
-//            searchengine.model.Site site1 = new searchengine.model.Site();
-//            site1 = siteRepository.findByName(site.getName());
-//            DetailedStatisticsItem item = new DetailedStatisticsItem();
-//            item.setName(site.getName());
-//            item.setUrl(site.getUrl());
-//            int pages = random.nextInt(1_000);
-//            int lemmas = pages * random.nextInt(1_000);
-//            item.setPages(pages);
-//            item.setLemmas(lemmas);
-//            item.setStatus(String.valueOf(site1.getStatus()));
-//            item.setError(site1.getLastError());
-//            item.setStatusTime(site1.getStatusTime().getLong());
-//            total.setPages(total.getPages() + pages);
-//            total.setLemmas(total.getLemmas() + lemmas);
-//            detailed.add(item);
-//        }
-//
-//        StatisticsResponse response = new StatisticsResponse();
-//        StatisticsData data = new StatisticsData();
-//        data.setTotal(total);
-//        data.setDetailed(detailed);
-//        response.setStatistics(data);
-//        response.setResult(true);
-//        return response;
-//    }
-//}
 @Service
 @RequiredArgsConstructor
 public class StatisticsServiceImpl implements StatisticsService {
@@ -126,13 +73,12 @@ public class StatisticsServiceImpl implements StatisticsService {
             if (siteEntity == null) {
                    continue;
             }
-            System.out.println(site.getName());
             DetailedStatisticsItem item = new DetailedStatisticsItem();
             item.setUrl(site.getUrl());
             item.setName(site.getName());
             item.setStatus(siteEntity.getStatus().name());
             item.setStatusTime(siteEntity.getStatusTime().toEpochSecond(ZoneOffset.UTC));
-            item.setPages(pageRepository.findAllBySiteId(siteEntity).size());
+            item.setPages(pageRepository.findAllBySiteId(siteEntity.getId()).size());
             item.setLemmas(lemmaRepository.findAllBySite(siteEntity).size());
 
             if (siteEntity.getStatus() == Status.FAILED) {

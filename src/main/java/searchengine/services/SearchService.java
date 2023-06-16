@@ -25,6 +25,9 @@ public class SearchService {
     @Autowired
     private final IndexRepository indexRepository;
 
+    private int offset = 0;
+    private int limit = 20;
+
     public SearchService(PageRepository pageRepository, SiteRepository siteRepository, LemmaRepository lemmaRepository, IndexRepository indexRepository) {
         this.pageRepository = pageRepository;
         this.siteRepository = siteRepository;
@@ -33,10 +36,13 @@ public class SearchService {
     }
 
     public List<SearchService.SearchResult> search(String query, String siteUrl, int offset, int limit) throws IOException {
+        if (offset != 0) this.offset = offset;
+        if (limit >= 0) this.limit = limit;
+
         if (siteUrl.equals("All sites")) {
             List<Site> siteList = siteRepository.findAll();
             for (Site site : siteList) {
-                search(query, site.getUrl(), offset, limit);
+                search(query, site.getUrl(), this.offset, this.limit);
             }
         }
 
@@ -59,8 +65,8 @@ public class SearchService {
 
         List<SearchService.SearchResult> searchResults = calculateRelevanceAndSortPages(pages, lemmas);
 
-        int startIndex = Math.min(offset, searchResults.size());
-        int endIndex = Math.min(offset + limit, searchResults.size());
+        int startIndex = Math.min(this.offset, searchResults.size());
+        int endIndex = Math.min(this.offset + this.limit, searchResults.size());
         List<SearchService.SearchResult> paginatedResults = searchResults.subList(startIndex, endIndex);
 
         return paginatedResults;
@@ -139,7 +145,7 @@ public class SearchService {
         List<String> matchedPages = new ArrayList<>();
 
         searchengine.model.Site site = siteRepository.findByUrl(siteUrl);
-        List<Page> pageList = pageRepository.findAllBySiteId(site);
+        List<Page> pageList = pageRepository.findAllBySiteId(site.getId());
         Lemma lemma1 = lemmaRepository.findByLemma(lemma);
 
         for (Page page : pageList) {

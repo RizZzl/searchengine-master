@@ -1,10 +1,5 @@
 package searchengine.controllers;
 
-import lombok.Getter;
-import lombok.Setter;
-import org.apache.lucene.morphology.LuceneMorphology;
-import org.apache.lucene.morphology.russian.RussianLuceneMorphology;
-import org.jsoup.Jsoup;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -16,14 +11,10 @@ import searchengine.services.IndexingService;
 import searchengine.services.SearchService;
 import searchengine.services.StatisticsService;
 
-import javax.naming.directory.SearchResult;
 import java.io.IOException;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.*;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api")
@@ -90,21 +81,11 @@ public class ApiController {
                     .body(Map.of("result", false, "error", "Данная страница находится за пределами сайтов, указанных в конфигурационном файле"));
         }
 
-        System.out.println("name" + name); //////////
         site.setUrl(url);
         site.setName(name);
         sites.add(site);
 
         sitesList.setSites(sites);
-
-//        if (isIndexingRunning) {
-//            return ResponseEntity.ok().body(Map.of("result", false, "error", "Индексация уже запущена"));
-//        }
-//
-//        isIndexingRunning = true;
-//        IndexingService indexingService = new IndexingService(pageRepository, siteRepository, lemmaRepository, indexRepository);
-//        indexingService.startIndexing();
-//        isIndexingRunning = false;
 
         return ResponseEntity.ok().body(Map.of("result", true));
     }
@@ -132,11 +113,10 @@ public class ApiController {
 
     private boolean isWebsiteAllowed(String website) {
         List<Site> siteList = sitesList.getSites();
-        if (siteList == null) return true;
+        if (siteList == null) return false;
         for (Site site : siteList) {
             if (site.getUrl().equals(website) || website.startsWith(site.getUrl())) return true;
         }
         return false;
     }
-
 }

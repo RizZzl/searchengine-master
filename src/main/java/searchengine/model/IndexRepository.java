@@ -12,4 +12,5 @@ public interface IndexRepository extends JpaRepository<Index, Integer> {
     Index findByLemmaAndPage(Lemma existingLemma, Page page);
     void deleteByPage(Page page);
     Index findByPageAndLemma(Page page, Lemma lemmaObj);
+    void deleteAllByPage(Page bySiteId);
 }

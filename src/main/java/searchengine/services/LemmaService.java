@@ -23,8 +23,15 @@ public class LemmaService {
         this.pageRepository = pageRepository;
     }
 
-    public void indexPage(String url) throws IOException {
-        Page page = pageRepository.findByPath(url);
+    public void indexPage(String url, Site site) throws IOException {
+        String path;
+        if (url.equals(site.getUrl())) {
+            path = url;
+        } else {
+            path = url.replaceAll(site.getUrl(), "");
+        }
+        Page page = pageRepository.findByPath(path);
+        if (page == null) return;
         String html = page.getContent();
 
         // Извлечение текста из HTML-кода

@@ -61,9 +61,12 @@ public class IndexingService {
             // Удаление данных по сайту
             Site siteDel = siteRepository.findByName(name);
             if (siteDel != null) {
-                indexRepository.deleteByPage(pageRepository.findBySiteId(siteDel.getId()));
+                List<Page> pageList = pageRepository.findAllBySiteId(siteDel.getId());
+                for (Page page : pageList) {
+                    indexRepository.deleteAllByPage(page);
+                }
                 lemmaRepository.deleteBySiteId(siteDel.getId());
-                pageRepository.deleteBySiteId(siteDel.getId());
+                pageRepository.deleteAllBySiteId(siteDel.getId());
                 siteRepository.deleteByName(siteDel.getName());
             }
 
@@ -148,16 +151,22 @@ public class IndexingService {
         LemmaService lemmaService = new LemmaService(pageRepository);
         lemmaCountMap = lemmaService.getLemmaCountMap();
 
-        lemmaService.indexPage(pageUrl);
+        lemmaService.indexPage(pageUrl, site);
 
         updateLemmaAndIndex(lemmaService.getLemmas(), page);
-
         // Обход ссылок на странице
         Elements links = doc.select("a[href]");
         for (Element link : links) {
             String linkUrl = link.attr("abs:href");
             // Проверка, был ли уже обработан этот URL
-            if (!isPageIndexed(linkUrl) && linkUrl.startsWith(site.getUrl())) {
+            String path;
+            if (linkUrl.equals(site.getUrl())) {
+                path = linkUrl;
+            } else {
+                path = linkUrl.replaceAll(site.getUrl(), "");
+            }
+            System.out.println(path);
+            if ((!isPageIndexed(path)) && linkUrl.startsWith(site.getUrl())) {
                 indexPage(website, linkUrl);
                 Thread.sleep(500); // Задержка между запросами к страницам
             }
@@ -234,9 +243,7 @@ public class IndexingService {
 
             // Удаление связей в таблице lemma
             List<Lemma> lemmas = lemmaRepository.findAllBySite(site);
-            for (Lemma lemma : lemmas) {
-                lemmaRepository.delete(lemma);
-            }
+            lemmaRepository.deleteAllInBatch(lemmas);
 
             // Удаление записи о странице из таблицы page
             pageRepository.delete(page);
