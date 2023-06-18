@@ -39,15 +39,15 @@ public class SearchService {
         if (offset != 0) this.offset = offset;
         if (limit >= 0) this.limit = limit;
 
-        if (siteUrl.equals("All sites")) {
+        if (siteUrl == null) {
             List<Site> siteList = siteRepository.findAll();
             for (Site site : siteList) {
-                search(query, site.getUrl(), this.offset, this.limit);
+                String url = site.getUrl().substring(0, site.getUrl().length() - 1);
+                search(query, url, this.offset, this.limit);
             }
         }
 
-        searchengine.model.Site site = siteRepository.findByUrl(siteUrl);
-
+        searchengine.model.Site site = siteRepository.findByUrl(siteUrl + "/");
         List<String> lemmas = getLemmas(query);
 
         List<String> pages = new ArrayList<>();
@@ -118,7 +118,7 @@ public class SearchService {
 
             for (String lemma : lemmas) {
                 Lemma lemmaObj = lemmaRepository.findByLemmaAndSiteId(lemma, page.getSite().getId());
-                Index index = indexRepository.findByPageAndLemma(page, lemmaObj);
+                Index index = indexRepository.findByPageIdAndLemmaId(page.getId(), lemmaObj.getId());
                 if (index != null) {
                     totalRank += index.getRank();
                 }
@@ -130,6 +130,7 @@ public class SearchService {
             SearchService.SearchResult result = new SearchService.SearchResult();
             result.setUri(page.getPath());
             result.setTitle(Jsoup.parse(page.getContent()).title());
+
             result.setSnippet(getSnippetFromPage(Jsoup.parse(page.getContent()).text(), lemmas));
             result.setRelevance(relevance);
 
@@ -149,7 +150,8 @@ public class SearchService {
         Lemma lemma1 = lemmaRepository.findByLemma(lemma);
 
         for (Page page : pageList) {
-            Index index = indexRepository.findByPageAndLemma(page, lemma1);
+            Index index = indexRepository.findByPageIdAndLemmaId(page.getId(), lemma1.getId());
+            if (index == null) continue;
             matchedPages.add(index.getPage().getPath());
         }
 
@@ -163,15 +165,19 @@ public class SearchService {
         int snippetLineCount = 3; // Количество строк в отрывке
         int snippetMaxLength = snippetLineCount * 100; // Максимальная длина отрывка
 
+        int lineCount = 0;
+        int snippetLength = 0;
         StringBuilder snippetBuilder = new StringBuilder();
         for (String line : lines) {
-            if (snippetBuilder.length() >= snippetMaxLength) {
+            if (snippetLength >= snippetMaxLength || lineCount >= snippetLineCount) {
                 break;
             }
 
             if (lineContainsLemma(line, lemmas)) {
                 line = highlightLemmaMatches(line, lemmas);
                 snippetBuilder.append(line).append("\n");
+                snippetLength += line.length();
+                lineCount++;
             }
         }
 
@@ -191,7 +197,7 @@ public class SearchService {
     public String highlightLemmaMatches(String line, List<String> lemmas) {
         for (String lemma : lemmas) {
             String highlightedLemma = "<b>" + lemma + "</b>";
-            line = line.replaceAll("(?i)\\b" + lemma + "\\b", highlightedLemma);
+            line = line.replaceAll("(?i)\\b" + Pattern.quote(lemma) + "\\b", highlightedLemma);
         }
         return line;
     }
@@ -205,7 +211,7 @@ public class SearchService {
 
             for (String lemma : lemmas) {
                 Lemma lemmaObj = lemmaRepository.findByLemmaAndSiteId(lemma, page.getSite().getId());
-                Index index = indexRepository.findByPageAndLemma(page, lemmaObj);
+                Index index = indexRepository.findByPageIdAndLemmaId(page.getId(), lemmaObj.getId());
                 if (index != null) {
                     totalRank += index.getRank();
                 }

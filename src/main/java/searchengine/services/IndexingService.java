@@ -165,7 +165,7 @@ public class IndexingService {
             } else {
                 path = linkUrl.replaceAll(site.getUrl(), "");
             }
-            System.out.println(path);
+
             if ((!isPageIndexed(path)) && linkUrl.startsWith(site.getUrl())) {
                 indexPage(website, linkUrl);
                 Thread.sleep(500); // Задержка между запросами к страницам

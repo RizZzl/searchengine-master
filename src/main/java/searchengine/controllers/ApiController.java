@@ -1,6 +1,7 @@
 package searchengine.controllers;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import searchengine.config.Site;
@@ -47,6 +48,7 @@ public class ApiController {
             return ResponseEntity.ok()
                     .body(Map.of("result", false, "error", "Индексация уже запущена"));
         }
+        ResponseEntity.ok().body(Map.of("result", true));
         isIndexingRunning = true;
         IndexingService indexingService = new IndexingService(pageRepository, siteRepository, lemmaRepository, indexRepository);
         indexingService.startIndexing();
