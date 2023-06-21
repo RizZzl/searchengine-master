@@ -1,5 +1,6 @@
 package searchengine.controllers;
 
+import org.hibernate.result.Output;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -45,7 +46,7 @@ public class ApiController {
     @GetMapping("/startIndexing")
     public ResponseEntity<Object> startIndexing() {
         if (isIndexingRunning) {
-            return ResponseEntity.ok()
+            return ResponseEntity.badRequest()
                     .body(Map.of("result", false, "error", "Индексация уже запущена"));
         }
         ResponseEntity.ok().body(Map.of("result", true));
@@ -60,7 +61,7 @@ public class ApiController {
     @GetMapping("/stopIndexing")
     public ResponseEntity<Object> stopIndexing() {
         if (!isIndexingRunning) {
-            return ResponseEntity.ok()
+            return ResponseEntity.badRequest()
                     .body(Map.of("result", false, "error", "Индексация не запущена"));
         }
         // Остановка текущей индексации (переиндексации)
@@ -72,32 +73,43 @@ public class ApiController {
 
     @PostMapping("/indexPage")
     public ResponseEntity<Object> indexPage(@RequestParam("url") String url) {
-        Site site = new Site();
-        List<Site> sites = new ArrayList<>();
+        // Проверка, передан ли сайт
+        if (url == null || url.isEmpty()) {
+            return ResponseEntity.badRequest()
+                    .body(Map.of("result", false, "error", "Неверно указан адрес страницы"));
+        }
 
-        // Извлечение имени сайта из URL
-        String name = extractWebsiteFromUrl(url);
         // Проверка, находится ли страница в пределах указанных сайтов
-        if (!isWebsiteAllowed(name)) {
+        if (!isWebsiteAllowed(url)) {
             return ResponseEntity.badRequest()
                     .body(Map.of("result", false, "error", "Данная страница находится за пределами сайтов, указанных в конфигурационном файле"));
         }
 
+        String name = extractWebsiteFromUrl(url);
+        Site site = new Site();
         site.setUrl(url);
         site.setName(name);
-        sites.add(site);
 
+        List<Site> sites = new ArrayList<>();
+        sites.add(site);
         sitesList.setSites(sites);
+
+        // Старт индексации
+        startIndexing();
 
         return ResponseEntity.ok().body(Map.of("result", true));
     }
 
     @GetMapping("/search")
     private ResponseEntity<Object> search(String query, String siteUrl, int offset, int limit) throws IOException {
+        if (query == null || query.isEmpty()) {
+            return ResponseEntity.badRequest()
+                    .body(Map.of("result", false, "error", "Задан пустой поисковый запрос"));
+        }
         SearchService searchService = new SearchService(pageRepository, siteRepository, lemmaRepository, indexRepository);
-        List<SearchService.SearchResult> paginatedResults = searchService.search(query, siteUrl, offset, limit);
+        SearchService.SearchResponse paginatedResponse = searchService.search(query, siteUrl, offset, limit);
 
-        return ResponseEntity.ok(paginatedResults);
+        return ResponseEntity.ok().body(Map.of("result", true, "count", paginatedResponse.getCount(), "data", paginatedResponse.getData()));
     }
 
     private String extractWebsiteFromUrl(String url) {

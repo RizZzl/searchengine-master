@@ -35,41 +35,50 @@ public class SearchService {
         this.indexRepository = indexRepository;
     }
 
-    public List<SearchService.SearchResult> search(String query, String siteUrl, int offset, int limit) throws IOException {
+    public SearchResponse search(String query, String siteUrl, int offset, int limit) throws IOException {
         if (offset != 0) this.offset = offset;
         if (limit >= 0) this.limit = limit;
 
+        int totalCount;
+        List<SearchResult> searchResults;
+
         if (siteUrl == null) {
             List<Site> siteList = siteRepository.findAll();
+            totalCount = 0;
+            searchResults = new ArrayList<>();
+
             for (Site site : siteList) {
-                String url = site.getUrl().substring(0, site.getUrl().length() - 1);
-                search(query, url, this.offset, this.limit);
+                SearchResponse response = search(query, site.getUrl(), this.offset, this.limit);
+                totalCount += response.getCount();
+                searchResults.addAll(response.getData());
             }
+        } else {
+            searchResults = new ArrayList<>();
+            Site site = siteRepository.findByUrl(siteUrl);
+            List<String> lemmas = getLemmas(query);
+            List<String> pages = new ArrayList<>();
+
+            for (String lemma : lemmas) {
+                List<String> matchedPages = searchPagesByLemma(lemma, site.getUrl());
+                if (pages.isEmpty()) {
+                    pages.addAll(matchedPages);
+                } else {
+                    pages.retainAll(matchedPages);
+                }
+            }
+
+            List<SearchResult> results = calculateRelevanceAndSortPages(pages, lemmas);
+            totalCount = results.size();
+
+            int startIndex = Math.min(offset, totalCount);
+            int endIndex = Math.min(offset + limit, totalCount);
+            searchResults = results.subList(startIndex, endIndex);
         }
 
-        searchengine.model.Site site = siteRepository.findByUrl(siteUrl + "/");
-        List<String> lemmas = getLemmas(query);
-
-        List<String> pages = new ArrayList<>();
-        for (String lemma : lemmas) {
-            List<String> matchedPages = new ArrayList<>();
-            if (site != null) {
-                matchedPages = searchPagesByLemma(lemma, site.getUrl());
-            }
-            if (pages.isEmpty()) {
-                pages.addAll(matchedPages);
-            } else {
-                pages.retainAll(matchedPages);
-            }
-        }
-
-        List<SearchService.SearchResult> searchResults = calculateRelevanceAndSortPages(pages, lemmas);
-
-        int startIndex = Math.min(this.offset, searchResults.size());
-        int endIndex = Math.min(this.offset + this.limit, searchResults.size());
-        List<SearchService.SearchResult> paginatedResults = searchResults.subList(startIndex, endIndex);
-
-        return paginatedResults;
+        SearchResponse searchResponse = new SearchResponse();
+        searchResponse.setCount(totalCount);
+        searchResponse.setData(searchResults);
+        return searchResponse;
     }
 
     public List<String> getLemmas(String query) throws IOException {
@@ -110,7 +119,7 @@ public class SearchService {
     }
 
     public List<SearchResult> calculateRelevanceAndSortPages(List<String> pages, List<String> lemmas) {
-        List<SearchService.SearchResult> searchResults = new ArrayList<>();
+        List<SearchResult> searchResults = new ArrayList<>();
 
         for (String pageUrl : pages) {
             Page page = pageRepository.findByPath(pageUrl);
@@ -127,17 +136,18 @@ public class SearchService {
             float maxRank = getMaxRank(pages, lemmas);
             float relevance = totalRank / maxRank;
 
-            SearchService.SearchResult result = new SearchService.SearchResult();
+            SearchResult result = new SearchResult();
+            result.setSite(page.getSite().getUrl());
+            result.setSiteName(page.getSite().getName());
             result.setUri(page.getPath());
             result.setTitle(Jsoup.parse(page.getContent()).title());
-
-            result.setSnippet(getSnippetFromPage(Jsoup.parse(page.getContent()).text(), lemmas));
+            result.setSnippet(getSnippetFromPage(page.getContent(), lemmas));
             result.setRelevance(relevance);
 
             searchResults.add(result);
         }
 
-        searchResults.sort(Comparator.comparing(SearchService.SearchResult::getRelevance).reversed());
+        searchResults.sort(Comparator.comparing(SearchResult::getRelevance).reversed());
 
         return searchResults;
     }
@@ -145,7 +155,7 @@ public class SearchService {
     public List<String> searchPagesByLemma(String lemma, String siteUrl) {
         List<String> matchedPages = new ArrayList<>();
 
-        searchengine.model.Site site = siteRepository.findByUrl(siteUrl);
+        Site site = siteRepository.findByUrl(siteUrl);
         List<Page> pageList = pageRepository.findAllBySiteId(site.getId());
         Lemma lemma1 = lemmaRepository.findByLemma(lemma);
 
@@ -172,11 +182,11 @@ public class SearchService {
             if (snippetLength >= snippetMaxLength || lineCount >= snippetLineCount) {
                 break;
             }
-
             if (lineContainsLemma(line, lemmas)) {
-                line = highlightLemmaMatches(line, lemmas);
-                snippetBuilder.append(line).append("\n");
-                snippetLength += line.length();
+                String parseLine = Jsoup.parse(line).text();
+                parseLine = highlightLemmaMatches(parseLine, lemmas);
+                snippetBuilder.append(parseLine).append("\n");
+                snippetLength += parseLine.length();
                 lineCount++;
             }
         }
@@ -227,10 +237,19 @@ public class SearchService {
     @Getter
     @Setter
     public class SearchResult {
+        private String site;
+        private String siteName;
         private String uri;
         private String title;
         private String snippet;
         private float relevance;
+    }
+
+    @Getter
+    @Setter
+    public class SearchResponse {
+        private int count;
+        private List<SearchResult> data;
     }
 }
 
