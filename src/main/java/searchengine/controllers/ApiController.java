@@ -17,6 +17,7 @@ import java.io.IOException;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
 
 @RestController
 @RequestMapping("/api")
@@ -30,12 +31,22 @@ public class ApiController {
     @Autowired
     private IndexRepository indexRepository;
 
+    public IndexingService indexingService;
     public SitesList sitesList = new SitesList();
     private final StatisticsService statisticsService;
-    private boolean isIndexingRunning = false;
+    private volatile boolean isIndexingRunning = false;
 
     public ApiController(StatisticsService statisticsService) {
         this.statisticsService = statisticsService;
+        // Получение списка сайтов из конфигурации приложения
+        List<searchengine.config.Site> sites1 = new ArrayList<>();
+        searchengine.config.Site site1 = new searchengine.config.Site();
+        site1.setUrl("http://www.playback.ru/");
+        site1.setName("PlayBack");
+        sites1.add(site1);
+        sitesList.setSites(sites1);
+
+        indexingService = new IndexingService(pageRepository, siteRepository, lemmaRepository, indexRepository, sitesList);
     }
 
     @GetMapping("/statistics")
@@ -49,11 +60,13 @@ public class ApiController {
             return ResponseEntity.badRequest()
                     .body(Map.of("result", false, "error", "Индексация уже запущена"));
         }
-        ResponseEntity.ok().body(Map.of("result", true));
+
         isIndexingRunning = true;
-        IndexingService indexingService = new IndexingService(pageRepository, siteRepository, lemmaRepository, indexRepository);
-        indexingService.startIndexing();
-        isIndexingRunning = false;
+        CompletableFuture.runAsync(() -> {
+            //IndexingService indexingService = new IndexingService(pageRepository, siteRepository, lemmaRepository, indexRepository, sitesList);
+            indexingService.startIndexing();
+            isIndexingRunning = false;
+        });
 
         return ResponseEntity.ok().body(Map.of("result", true));
     }
@@ -65,8 +78,9 @@ public class ApiController {
                     .body(Map.of("result", false, "error", "Индексация не запущена"));
         }
         // Остановка текущей индексации (переиндексации)
-        IndexingService indexingService = new IndexingService(pageRepository, siteRepository, lemmaRepository, indexRepository);
+        //IndexingService indexingService = new IndexingService(pageRepository, siteRepository, lemmaRepository, indexRepository, sitesList);
         indexingService.stopIndexingProcess();
+        isIndexingRunning = false;
 
         return ResponseEntity.ok().body(Map.of("result", true));
     }

@@ -6,6 +6,7 @@ import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import searchengine.config.SitesList;
@@ -25,7 +26,7 @@ public class IndexingService {
     private List<String> urls;
     private static final String USER_AGENT = "HeliontSearchBot";
     private volatile boolean stopIndexingRequested;
-    private final SitesList sites = new SitesList();
+    private final SitesList sites;
     private Map<String, Integer> lemmaCountMap = new HashMap<>();
 
     @Autowired
@@ -38,23 +39,16 @@ public class IndexingService {
     private final IndexRepository indexRepository;
 
     @Autowired
-    public IndexingService(PageRepository pageRepository, SiteRepository siteRepository, LemmaRepository lemmaRepository, IndexRepository indexRepository) {
+    public IndexingService(PageRepository pageRepository, SiteRepository siteRepository, LemmaRepository lemmaRepository, IndexRepository indexRepository, SitesList sites) {
         this.pageRepository = pageRepository;
         this.siteRepository = siteRepository;
         this.lemmaRepository = lemmaRepository;
         this.indexRepository = indexRepository;
+        this.sites = sites;
     }
 
     @Transactional
     public void startIndexing() {
-        // Получение списка сайтов из конфигурации приложения
-        List<searchengine.config.Site> sites1 = new ArrayList<>();
-        searchengine.config.Site site1 = new searchengine.config.Site();
-        site1.setUrl("http://www.playback.ru/");
-        site1.setName("PlayBack");
-        sites1.add(site1);
-        sites.setSites(sites1);
-
         List<String> names = getWebsitesFromConfiguration();
         int count = 0;
         for (String name : names) {
@@ -284,7 +278,6 @@ public class IndexingService {
 
                 completedSuccessfully = true;
             } catch (Exception e) {
-                System.out.println("error: " + e); /////
                 completedSuccessfully = false;
                 errorMessage = e.getMessage();
             } finally {

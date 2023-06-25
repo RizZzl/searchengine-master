@@ -207,8 +207,11 @@ public class SearchService {
     public String highlightLemmaMatches(String line, List<String> lemmas) {
         for (String lemma : lemmas) {
             String highlightedLemma = "<b>" + lemma + "</b>";
-            line = line.replaceAll("(?i)\\b" + Pattern.quote(lemma) + "\\b", highlightedLemma);
+            line = line.replaceAll(lemma, highlightedLemma);
+            line = line.replaceAll(lemma.substring(0, 1).toUpperCase() + lemma.substring(1),
+                            highlightedLemma.substring(0, 3) + highlightedLemma.substring(3, 4).toUpperCase() + highlightedLemma.substring(4));
         }
+        System.out.println(line);
         return line;
     }
 
