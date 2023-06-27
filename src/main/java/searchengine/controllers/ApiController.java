@@ -63,7 +63,6 @@ public class ApiController {
 
         isIndexingRunning = true;
         CompletableFuture.runAsync(() -> {
-            //IndexingService indexingService = new IndexingService(pageRepository, siteRepository, lemmaRepository, indexRepository, sitesList);
             indexingService.startIndexing();
             isIndexingRunning = false;
         });
@@ -78,7 +77,6 @@ public class ApiController {
                     .body(Map.of("result", false, "error", "Индексация не запущена"));
         }
         // Остановка текущей индексации (переиндексации)
-        //IndexingService indexingService = new IndexingService(pageRepository, siteRepository, lemmaRepository, indexRepository, sitesList);
         indexingService.stopIndexingProcess();
         isIndexingRunning = false;
 

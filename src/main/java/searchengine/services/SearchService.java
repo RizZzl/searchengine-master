@@ -127,6 +127,7 @@ public class SearchService {
 
             for (String lemma : lemmas) {
                 Lemma lemmaObj = lemmaRepository.findByLemmaAndSiteId(lemma, page.getSite().getId());
+                if (lemmaObj == null) continue;
                 Index index = indexRepository.findByPageIdAndLemmaId(page.getId(), lemmaObj.getId());
                 if (index != null) {
                     totalRank += index.getRank();
@@ -160,6 +161,7 @@ public class SearchService {
         Lemma lemma1 = lemmaRepository.findByLemma(lemma);
 
         for (Page page : pageList) {
+            if (lemma1 == null) continue;
             Index index = indexRepository.findByPageIdAndLemmaId(page.getId(), lemma1.getId());
             if (index == null) continue;
             matchedPages.add(index.getPage().getPath());
@@ -206,13 +208,24 @@ public class SearchService {
 
     public String highlightLemmaMatches(String line, List<String> lemmas) {
         for (String lemma : lemmas) {
-            String highlightedLemma = "<b>" + lemma + "</b>";
-            line = line.replaceAll(lemma, highlightedLemma);
-            line = line.replaceAll(lemma.substring(0, 1).toUpperCase() + lemma.substring(1),
-                            highlightedLemma.substring(0, 3) + highlightedLemma.substring(3, 4).toUpperCase() + highlightedLemma.substring(4));
+            String fullLemma = getFullLemma(line, lemma);
+            if (fullLemma.isEmpty()) continue;
+            String highlightedLemma = "<b>" + fullLemma + "</b>";
+            line = line.replaceAll(fullLemma, highlightedLemma);
         }
-        System.out.println(line);
         return line;
+    }
+
+    public String getFullLemma(String line, String lemma) {
+        String[] words = line.split(" ");
+        String fullLemma = "";
+        for (String word : words) {
+            if (word.toLowerCase().contains(lemma)) {
+                fullLemma = word;
+                break;
+            }
+        }
+        return fullLemma;
     }
 
     public float getMaxRank(List<String> pages, List<String> lemmas) {
@@ -224,6 +237,7 @@ public class SearchService {
 
             for (String lemma : lemmas) {
                 Lemma lemmaObj = lemmaRepository.findByLemmaAndSiteId(lemma, page.getSite().getId());
+                if (lemmaObj == null) continue;
                 Index index = indexRepository.findByPageIdAndLemmaId(page.getId(), lemmaObj.getId());
                 if (index != null) {
                     totalRank += index.getRank();
