@@ -84,16 +84,19 @@ public class IndexingService {
             IndexingTask indexingTask = new IndexingTask(name, url);
             ForkJoinPool.commonPool().invoke(indexingTask);
 
-            // Обновление статуса сайта на INDEXED или FAILED по завершении индексации
-            if (indexingTask.isCompletedSuccessfully()) {
-                site.setStatus(Status.INDEXED);
-            } else {
+            // Обновление статуса сайта на INDEXED или FAILED
+            if (stopIndexingRequested) {
+                site.setStatus(Status.FAILED);
+                site.setLastError("Индексация остановлена пользователем");
+            } else if (!indexingTask.isCompletedSuccessfully()) {
                 site.setStatus(Status.FAILED);
                 String errorMessage = indexingTask.getErrorMessage();
                 if (errorMessage.length() > 255) {
                     errorMessage = errorMessage.substring(0, 255);
                 }
                 site.setLastError(errorMessage);
+            } else {
+                site.setStatus(Status.INDEXED);
             }
             siteRepository.save(site);
         }
@@ -114,6 +117,8 @@ public class IndexingService {
     }
 
     private void indexPage(String website, String pageUrl) throws IOException, InterruptedException {
+        if (stopIndexingRequested) return;
+
         if (isPageIndexed(pageUrl)) {
             // Если страница уже проиндексирована, удаление информации о ней
             deleteIndexedPage(pageUrl);
@@ -286,16 +291,6 @@ public class IndexingService {
             } catch (Exception e) {
                 completedSuccessfully = false;
                 errorMessage = e.getMessage();
-            } finally {
-                if (stopIndexingRequested) {
-                    // Если была запрошена остановка индексации, записываем состояние FAILED и текст ошибки
-                    Site site = siteRepository.findByName(name);
-                    if (site != null) {
-                        site.setStatus(Status.FAILED);
-                        site.setLastError("Индексация остановлена пользователем");
-                        siteRepository.save(site);
-                    }
-                }
             }
         }
     }

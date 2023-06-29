@@ -37,12 +37,16 @@ public class ApiController {
     public ApiController(StatisticsService statisticsService) {
         this.statisticsService = statisticsService;
         // Получение списка сайтов из конфигурации приложения
-        List<searchengine.config.Site> sites1 = new ArrayList<>();
-        searchengine.config.Site site1 = new searchengine.config.Site();
-        site1.setUrl("http://www.playback.ru/");
-        site1.setName("PlayBack");
-        sites1.add(site1);
-        sitesList.setSites(sites1);
+        List<searchengine.config.Site> sites = new ArrayList<>();
+        searchengine.config.Site site = new searchengine.config.Site();
+        site.setUrl("http://www.playback.ru/");
+        site.setName("PlayBack");
+        searchengine.config.Site site2 = new searchengine.config.Site();
+        site2.setUrl("https://www.svetlovka.ru//");
+        site2.setName("Svetlovka");
+        sites.add(site);
+        sites.add(site2);
+        sitesList.setSites(sites);
     }
 
     @GetMapping("/statistics")
