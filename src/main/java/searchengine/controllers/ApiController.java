@@ -1,8 +1,6 @@
 package searchengine.controllers;
 
-import org.hibernate.result.Output;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import searchengine.config.Site;
@@ -45,8 +43,6 @@ public class ApiController {
         site1.setName("PlayBack");
         sites1.add(site1);
         sitesList.setSites(sites1);
-
-        indexingService = new IndexingService(pageRepository, siteRepository, lemmaRepository, indexRepository, sitesList);
     }
 
     @GetMapping("/statistics")
@@ -62,6 +58,8 @@ public class ApiController {
         }
 
         isIndexingRunning = true;
+        indexingService = new IndexingService(pageRepository, siteRepository, lemmaRepository, indexRepository, sitesList);
+        //indexingService.deleteDB();
         CompletableFuture.runAsync(() -> {
             indexingService.startIndexing();
             isIndexingRunning = false;
@@ -77,7 +75,10 @@ public class ApiController {
                     .body(Map.of("result", false, "error", "Индексация не запущена"));
         }
         // Остановка текущей индексации (переиндексации)
-        indexingService.stopIndexingProcess();
+        if (indexingService != null) {
+            indexingService.stopIndexingProcess();
+        }
+
         isIndexingRunning = false;
 
         return ResponseEntity.ok().body(Map.of("result", true));

@@ -6,7 +6,6 @@ import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import searchengine.config.SitesList;
@@ -47,14 +46,21 @@ public class IndexingService {
         this.sites = sites;
     }
 
+    public void deleteDB() {
+        indexRepository.deleteAll();
+        lemmaRepository.deleteAll();
+        pageRepository.deleteAll();
+        siteRepository.deleteAll();
+    }
+
     @Transactional
     public void startIndexing() {
         List<String> names = getWebsitesFromConfiguration();
         int count = 0;
         for (String name : names) {
             // Удаление данных по сайту
-            Site siteDel = siteRepository.findByName(name);
-            if (siteDel != null) {
+            if (siteRepository.findByName(name) != null) {
+                Site siteDel = siteRepository.findByName(name);
                 List<Page> pageList = pageRepository.findAllBySiteId(siteDel.getId());
                 for (Page page : pageList) {
                     indexRepository.deleteAllByPage(page);
